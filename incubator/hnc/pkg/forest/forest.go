@@ -38,10 +38,10 @@ type TypeSyncer interface {
 	GetNumPropagatedObjects() int
 }
 
-// NumPropagatedObjectsSyncer syncs the number of propagated objects. ConfigReconciler implements the
-// interface so that it can be called by an ObjectReconciler if the number of propagated objects is changed.
-type NumPropagatedObjectsSyncer interface {
-	SyncNumPropagatedObjects(logr.Logger)
+// NumObjectsSyncer syncs the number of propagated and source objects. ConfigReconciler implements the
+// interface so that it can be called by an ObjectReconciler if the number of propagated or source objects is changed.
+type NumObjectsSyncer interface {
+	SyncNumObjects(logr.Logger)
 }
 
 // Forest defines a forest of namespaces - that is, a set of trees. It includes methods to mutate
@@ -66,7 +66,7 @@ type Forest struct {
 
 	// ObjectsStatusSyncer is the ConfigReconciler that an object reconciler can call if the status of the HNCConfiguration
 	// object needs to be updated.
-	ObjectsStatusSyncer NumPropagatedObjectsSyncer
+	ObjectsStatusSyncer NumObjectsSyncer
 }
 
 func NewForest() *Forest {
@@ -142,7 +142,10 @@ func (f *Forest) GetNamespaceNames() []string {
 
 type namedNamespaces map[string]*Namespace
 
-// TODO Store source objects by GK in the forest - https://github.com/kubernetes-sigs/multi-tenancy/issues/281
+// While storing the V in GVK is not strictly necessary to match what's in the HNC type configuration,
+// as a client of the API server, HNC will be to be reading and writing versions of the API to communicate
+// with the API server. Since we need the V to work with the API server anyways anyways, we will choose to
+// use the GVK as the key in this map.
 type objects map[schema.GroupVersionKind]map[string]*unstructured.Unstructured
 
 // conditions stores the conditions for a single namespace, in the form obj -> code -> msg. Note
@@ -397,6 +400,11 @@ func (ns *Namespace) GetOriginalObjects(gvk schema.GroupVersionKind) []*unstruct
 		o = append(o, obj)
 	}
 	return o
+}
+
+// GetNumOriginalObjects returns the total number of original objects of a specific GVK in the namespace.
+func (ns *Namespace) GetNumOriginalObjects(gvk schema.GroupVersionKind) int {
+	return len(ns.originalObjects[gvk])
 }
 
 // GetPropagatedObjects returns all original copies in the ancestors.
