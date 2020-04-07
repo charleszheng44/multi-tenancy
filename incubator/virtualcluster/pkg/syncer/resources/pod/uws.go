@@ -34,6 +34,9 @@ import (
 	"github.com/kubernetes-sigs/multi-tenancy/incubator/virtualcluster/pkg/syncer/metrics"
 	"github.com/kubernetes-sigs/multi-tenancy/incubator/virtualcluster/pkg/syncer/reconciler"
 	"github.com/kubernetes-sigs/multi-tenancy/incubator/virtualcluster/pkg/syncer/resources/node"
+
+	perfconst "github.com/charleszheng44/vc-bench/pkg/constants"
+	"github.com/charleszheng44/vc-bench/pkg/util/perftimestamp"
 )
 
 // StartUWS starts the upward syncer
@@ -96,6 +99,7 @@ func (c *controller) processNextWorkItem() bool {
 }
 
 func (c *controller) backPopulate(key string) error {
+	uwsReconcileTime := time.Now().Unix()
 	pNamespace, pName, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key %v: %v", key, err))
@@ -217,6 +221,14 @@ func (c *controller) backPopulate(key string) error {
 			}
 		}
 		newPod.Status = pPod.Status
+
+		ctx := map[string]int64{
+			perfconst.LabelPerfBenchUWSReconcileTime:  uwsReconcileTime,
+			perfconst.LabelPerfBenchFirstUpdateTime:   time.Now().Unix(),
+			perfconst.LabelPerfBenchSuperCreationTime: pPod.GetCreationTimestamp().Time.Unix(),
+			perfconst.LabelPerfBenchSuperReadyTime:    pPod.Status.Conditions[0].LastTransitionTime.Unix(),
+		}
+		perftimestamp.AnnotateTimestampsIfNotExist(newPod, ctx)
 		if _, err = tenantClient.CoreV1().Pods(vPod.Namespace).UpdateStatus(newPod); err != nil {
 			return fmt.Errorf("failed to back populate pod %s/%s status update for cluster %s: %v", vPod.Namespace, vPod.Name, clusterName, err)
 		}

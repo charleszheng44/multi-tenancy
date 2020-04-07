@@ -32,6 +32,9 @@ import (
 	"github.com/kubernetes-sigs/multi-tenancy/incubator/virtualcluster/pkg/syncer/conversion"
 	"github.com/kubernetes-sigs/multi-tenancy/incubator/virtualcluster/pkg/syncer/metrics"
 	"github.com/kubernetes-sigs/multi-tenancy/incubator/virtualcluster/pkg/syncer/reconciler"
+
+	perfconst "github.com/charleszheng44/vc-bench/pkg/constants"
+	"github.com/charleszheng44/vc-bench/pkg/util/perftimestamp"
 )
 
 func (c *controller) StartDWS(stopCh <-chan struct{}) error {
@@ -42,6 +45,7 @@ func (c *controller) StartDWS(stopCh <-chan struct{}) error {
 }
 
 func (c *controller) Reconcile(request reconciler.Request) (reconciler.Result, error) {
+	dwsReconcileTime := time.Now().Unix()
 	klog.V(4).Infof("reconcile pod %s/%s for cluster %s", request.Namespace, request.Name, request.ClusterName)
 	targetNamespace := conversion.ToSuperMasterNamespace(request.ClusterName, request.Namespace)
 	pPod, err := c.podLister.Pods(targetNamespace).Get(request.Name)
@@ -66,6 +70,7 @@ func (c *controller) Reconcile(request reconciler.Request) (reconciler.Result, e
 		operation = "pod_add"
 		defer recordOperation(operation, time.Now())
 		vPod := vPodObj.(*v1.Pod)
+		perftimestamp.AnnotateTimestampIfNotExist(vPod, perfconst.LabelPerfBenchDWSReconcileTime, dwsReconcileTime)
 		err := c.reconcilePodCreate(request.ClusterName, targetNamespace, request.UID, vPod)
 		if err != nil {
 			klog.Errorf("failed reconcile Pod %s/%s CREATE of cluster %s %v", request.Namespace, request.Name, request.ClusterName, err)
